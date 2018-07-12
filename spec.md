@@ -65,19 +65,24 @@ def render_document(document : Document):
 def deprefix(document : Document):
   to_render = get_next_key(document)
   cases:
-    traverse(next_linked(to_render)).is_Terminal -> return to_render.linked.value
+    traverse(next_linked(to_render)).is_Terminal -> return render_terminal(document)
     traverse(next_linked(to_render)).is_Linked -> render(document)
+
+def render_terminal(terminal : Terminal):
+  assert document.is_Terminal
 
 #### Main Nouns: Defining Data Structures
 
-NOTE: I am not sure if I am happy with the document data structure yet - it doesn't exactly mesh with render_document as described above.
+NOTE: I am not sure if I am happy with the document data structure. Terminals are still documents, and it therefore feels wrong to break it out into a different structure (it is a special document with links to only strings). But then I have an issue - how do I represent a value in my current Document structure?
 
 Document {
-  type = is_Linked or is_Terminal
   links = [list_of_links]
   keys = {key1 : link_in_links, ...}
   name = my_name
-  value = render(self)
+}
+
+Terminal {
+  value = a_string
 }
 
 Link {
