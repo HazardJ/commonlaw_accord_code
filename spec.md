@@ -1,9 +1,9 @@
-# Preliminary Spec
+# **Preliminary Spec**
 
 I consider this document a first attempt at defining the structure of the coding portion
 of the GISP.
 
-## A Theoretical Aside
+## **A Theoretical Aside**
 
 I apologize for the pseudophilosophical ramble that follows - stuff like this helps me conceptualize the abstract system that I am going to implement.
 
@@ -12,15 +12,15 @@ that is based of a Platonic Ideal (the uninstantiated my_city object) but is its
 
 With that philosophical aside over with, I will now describe how I believe we should architect the program. I haven’t looked deeply at the Perl implementation (I’ve never used the language and don’t really have time to learn right now), but I’m guessing that it’s too tightly tied to that specific implementation of the Prose Object Model (specifically file based architecture). In my opinion, this makes the interface confusing – the user (even if it is only interfaced with through its method contracts)should be allowed to first think in Prose Object Graph, and only then consider specific implementations.
 
-## The Spec
+## **The Spec**
 
-### Defining the Abstract Structure
+### **Defining the Abstract Structure**
 
 Note: I am still not sure if I want to think about this functionally are object orientally yet, so forgive me for mixing paradigms / providing some ambiguity.
 
 I propose that we begin by defining a set of function contracts that defines a Prose Object Model in the abstract. Each node shall be, in this document, hereafter referred to as a **Document** (in the spirit of the contracts as artificats doc you guys linked). Each Model contains a value (its text content which may be sprinkled with keys), and an edge list, and an edge lookup (where keys are linked to edges). Note that the value is not actually seperate, but are an ordered list of *edges to terminal nodes of the graph*. Terminal nodes are nodes that have no outgoing edges, and are the only nodes in the graph with value (a string, a number, etc). Non terminal nodes will only contain a list of keys and a list of edges. Our first implementation should consider keys in the abstract (as a *symbolic link to some Document*, not a string enclosed in braces), and values in the same way (not as a string or filepath etc, but a *pointer to another Document*). In this case, the node that contains “my age is {jake.name}” will actually contain (in its edge list, in addition to other references) a reference to a node that contains “my age is “ and a symbolic link that contains {jake.name} (if this reference to this link cannot be found, it can be considered a reference to a string ‘{jake.name}’). Note that I have not yet thought out how we will represent the difference between a link determined by a key (which involves prefixing) vs a link w/ no key. It is possible that a keyed link can just be considered a subclass of Edge. 
 
-### Functions: A High Level Overview
+### **Functions: A High Level Overview**
 
 Our implementation consists of two fundamental operations on two data structures to be further described below.
 
@@ -28,13 +28,13 @@ Verbs: **Render**, **Deprefix**
 
 Nouns: **Document** (Linked_Document, Terminal_Document) and **Link**
 
-#### Verbs
+#### **Verbs**
 
-##### Render
+##### **Render_document**
 
 A Document is rendered by repeated deprefixing. Deprefix is recursively called on a Linked_Document until it becomes a Terminal_Document (Base Case).
 
-##### Deprefix
+##### **Render_key**
 
 Links can be considred as **links** to currently unknown edges to be discovered at render time by the algorithm sketched below:
 
@@ -49,46 +49,82 @@ Our first implementation will operate only on the level of these entities:
 
 I would also like to consider the idea of a Universe, which is defined by all possible combination of prefixed to totally deprefixed (empty string) values. **Note that the algorithm as currently described performs a greedy search, choosing to inhabit the first valid Universe it encounters on each execution of deprefix.**
 
-### A More Technical Definition
+### **A More Technical Definition**
 
 Here I will provide a spec that looks slightly more like code.
 
-#### Main Verbs: Function Contracts (in Statically Typed syntax)
+#### **Main Verbs: Function Contracts (in Statically Typed syntax)**
 
-For any of you who did CS19 this came out looking like Pyret lol.
+For any of you who did CS19 this came out looking like Pyret lol. I chose python syntax highlighting for this pseudocode because some is better than nothing.
 
-def render_document(document : Document):
+```python
+def render_document(document :: Document):
+  '''
+  Render key by key until the document is terminal, at which time we return its
+  value.
+
+  Parameters
+  ----------
+  document: a Document to render
+
+  Returns
+  -------
+  The string representing the fully rendered document
+  '''
   cases:
-    document.is_Linked -> deprefix(document)
-    document.is_Terminal -> return document.value
+    terminal => return document.value
+    linked => render_document(render_key(document, document))
 
-def deprefix(document : Document):
+def render_key(document :: Document, original_document :: Document):
+  '''
+  Render the next key in the document.
+
+  Parameters
+  ----------
+  document: The document being actively traversed
+  original_document: The original document, kept to return in case no match for
+                      the key is found.
+  
+  Returns
+  -------
+  The document with the given key rendered.
+  '''
   to_render = get_next_key(document)
+  next_linked = traverse(next_linked(to_render)
   cases:
-    traverse(next_linked(to_render)).is_Terminal -> return render_terminal(document)
-    traverse(next_linked(to_render)).is_Linked -> render(document)
+    terminal => return document.value
+    linked => render(document)
 
-def render_terminal(terminal : Terminal):
+def render_terminal(terminal :: Terminal):
   assert document.is_Terminal
+```
 
-#### Main Nouns: Defining Data Structures
+#### **Main Nouns: Defining Data Structures**
 
-NOTE: I am not sure if I am happy with the document data structure. Terminals are still documents, and it therefore feels wrong to break it out into a different structure (it is a special document with links to only strings). But then I have an issue - how do I represent a value in my current Document structure?
+```python
+data Document:
+  '''
+  Represents a Node on the Prose Object Graph
+  '''
+  | terminal(value :: String) # We may expand this to include other things,
+    # such as code
+  | linked(links :: [list_of_links], keys :: {key1 : link_in_links, ...},
+      name :: string)
 
-Document {
-  links = [list_of_links]
-  keys = {key1 : link_in_links, ...}
-  name = my_name
-}
+data Link:
+  '''
+  Represents an Edge on the Prose Object Graph
+  '''
+  | linked(start :: Document.linked, destination :: Document.linked)
+  | terminal(start :: Document.linked, destination :: Document.terminal)
 
-Terminal {
-  value = a_string
-}
-
-Link {
-  start: starting_Document
-  destination: dest_Document
-}
+data Key:
+  '''
+  A key representing the binding of a link.
+  '''
+  | linked(name :: String, link :: Link.linked)
+  | literal(name :: String, link :: Link.terminal)
+```
 
 ### Moving Forward: a Roadmap
 
