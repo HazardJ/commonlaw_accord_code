@@ -18,15 +18,23 @@ With that philosophical aside over with, I will now describe how I believe we sh
 
 Note: I am still not sure if I want to think about this functionally are object orientally yet, so forgive me for mixing paradigms / providing some ambiguity.
 
-I propose that we begin by defining a set of function contracts that defines a Prose Object Model in the abstract. Each node shall be, in this document, hereafter referred to as a **Document** (in the spirit of the contracts as artificats doc you guys linked). Each Model contains a value (its text content which may be sprinkled with keys), and an edge list, and an edge lookup (where keys are linked to edges). Note that the value is not actually seperate, but are an ordered list of *edges to terminal nodes of the graph*. Terminal nodes are nodes that have no outgoing edges, and are the only nodes in the graph with value (a string, a number, etc). Non terminal nodes will only contain a list of keys and a list of edges. Our first implementation should consider keys in the abstract (as a *symbolic link to some Document*, not a string enclosed in braces), and values in the same way (not as a string or filepath etc, but a *pointer to another Document*). In this case, the node that contains “my age is {jake.name}” will actually contain (in its edge list, in addition to other references) a reference to a node that contains “my age is “ and a symbolic link that contains {jake.name} (if this reference to this link cannot be found, it can be considered a reference to a string ‘{jake.name}’). Note that I have not yet thought out how we will represent the difference between a link determined by a key (which involves prefixing) vs a link w/ no key. It is possible that a keyed link can just be considered a subclass of Edge. 
+I propose that we begin by defining a set of function contracts that defines a Prose Object Model in the abstract. Each node shall be, in this document, hereafter referred to as a **Document** (in the spirit of the contracts as artificats doc you guys linked). Each Model contains a value (its text content which may be sprinkled with keys), and an edge list, and an edge lookup (where keys are linked to edges). Note that the value is not actually seperate, but are an ordered list of *edges to terminal nodes of the graph*. Terminal nodes are nodes that have no outgoing edges, and are the only nodes in the graph with value (a string, a number, etc). Non terminal nodes will only contain a list of keys and a list of edges. Our first implementation should consider keys in the abstract (as a *symbolic link to some Document*, not a string enclosed in braces), and values in the same way (not as a string or filepath etc, but a *pointer to another Document*). In this case, the node that contains “my age is {jake.name}” will actually contain (in its edge list, in addition to other references) a reference to a node that contains “my age is “ and a symbolic link that contains {jake.name} (if this reference to this link cannot be found, it can be considered a reference to a string ‘{jake.name}’). Note that I have not yet thought out how we will represent the difference between a link determined by a key (which involves prefixing) vs a link w/ no key. It is possible that a keyed link can just be considered a subclass of Edge.
+
+A non-terminal document only holds and an identifier, tokens (terminal and hanging), and links. It holds the tokens in one basket, and the links in another - a value basket and a map basket respectively. The value basket is the body of the document, which is to be rendered in sequential order. When rendering a terminal token, you can load the value of the terminal document directly. When loading a hanging token, a search must be exectuted. This is where the map comes into play.
+
+The map basket holds, in its values, all of the other documents that document knows about. These are represented as links. The keys of the map are bound tokens. The values of the map may be conceptualized as roads, whereas the keys of the map are road signs.
+
+When a hanging token is referenced, a search commences. It ends when it finds a matching bound token or exhausts the available subgraph and knows that there is no matching bound token at any level of prefixing (in which case it renders the key as is).
+
+Note that in this structure, all of the information is in terminal nodes, and documents are seen as having no value, with each string acting as a link to a document. If this is a laborious representation, we can allow the nodes to hold value, in which case this system looks different.
 
 ### **Functions: A High Level Overview**
 
 Our implementation consists of two fundamental operations on two data structures to be further described below.
 
-Verbs: **Render**, **Deprefix**
+Verbs: **Render_document**, **Render_key**, **Search_for**
 
-Nouns: **Document** (Linked_Document, Terminal_Document) and **Link**
+Nouns: **Document**, **Link**, **Map**
 
 #### **Verbs**
 
@@ -44,18 +52,55 @@ Links can be considred as **links** to currently unknown edges to be discovered 
 
 Our first implementation will operate only on the level of these entities:
 
-1. A **Document**, which is subclassed by a **Linked Document** and a **Terminal Document**
-2. A **Link**, which is a reference to another **Document**
+1. A **Document**. It can be of type:
+    1. **Terminal Document**, which is a document containing only a String (and eventually Turing complete code).
+    2. **Linked Document**, which is a document containing a list of tokens as well as a Map of {key : link, ...}. The list of links
+2. A **Link**, which is a reference to another **Document**. It can be of type:
+    1. **Terminal Link**, which is a reference to a Terminal Document
+    2. **Hanging Link**, is a link to an unknown value. This is what was previously referred to as a 'key'.
+    3. **Linked Link**, which is a reference to a nother Linked Document. This should only appear in the Map.
+3. A **Map**
 
-I would also like to consider the idea of a Universe, which is defined by all possible combination of prefixed to totally deprefixed (empty string) values. **Note that the algorithm as currently described performs a greedy search, choosing to inhabit the first valid Universe it encounters on each execution of deprefix.**
+I would also like to consider the idea of a Universe, which is defined by all possible combination of prefixed to totally deprefixed (empty string) values. **Note that the algorithm as currently described performs a greedy search, choosing to inhabit the first valid Universe it encounters on each execution of render_key.** Also note that the current approach (depth first search) works will in a directory structure (which is tree-like) but may run into serious issues in a more complicated graph, especially one that is fully traversable and has cycles.
 
 ### **A More Technical Definition**
 
 Here I will provide a spec that looks slightly more like code.
 
-#### **Main Verbs: Function Contracts (in Statically Typed syntax)**
+A quick introduction to the syntax used below (stolen from pyret, the **functional language** taught in CS19 at Brown). The language has no mutable values. The central construct of the language is the 'cases' block. The cases block can be seen as a special type of if statement, except it is one that depends solely on the structure of the data. For example, imagine counting items in a list. The list can be either empty or still have values left. If it still has values left, return 1 + the same function called on the rest of the list. If not, then you return the current counter. For example:
 
-For any of you who did CS19 this came out looking like Pyret lol. I chose python syntax highlighting for this pseudocode because some is better than nothing.
+```python
+#the data structure
+data List:
+  | populated(head :: Object, rest :: List)
+  | mt(None)
+
+#the function
+def list_length(list):
+  '''
+  Calculates the length of a list.
+  '''
+  cases(List):
+    | populated =>
+      return 1 + list_length(rest(list))
+    | mt => return 0
+```
+
+Other example data structures would be:
+
+```python
+data Tree:
+  | populated(left_child :: Tree, right_child :: Tree)
+  | leaf
+
+data Graph:
+  | Node(value :: Object, neighbors :: List)
+
+```
+
+Recursion is a central concept in functional programming. Each recursive function can be seen as performing the same computation on subsets of the structure and then combining all the values to calculate the final answer. The structure of the data is therefore very important and can also end up driving the algorithm. I haven't programmed functionally in a while (since freshman year), but I remember that Geoffrey mentioned Haskell as an option, and I believe that the core algorithm would be well suited to a functional approach. Even if we end up using python, a functional brainstorm can serve as great inspiration.
+
+#### **Main Verbs: Function Contracts (in Statically Typed syntax)**
 
 ```python
 def render_document(document :: Document):
@@ -71,11 +116,15 @@ def render_document(document :: Document):
   -------
   The string representing the fully rendered document
   '''
-  cases:
-    terminal => return document.value
-    linked => render_document(render_key(document, document))
+  cases(Document) document:
+    | terminal => return ''
+    | linked =>
+      rest_of_document = Document(document.token_list, rest(document.link_map),
+        document.name)
+      next_token = head(document.token_list)
+      render_next_token(next_token, document.link_map, 0) + render_document(rest_of_document)
 
-def render_key(document :: Document, original_document :: Document):
+def render_next_token(next_token :: Token, link_map :: Map, deprefix_count):
   '''
   Render the next key in the document.
 
@@ -83,17 +132,67 @@ def render_key(document :: Document, original_document :: Document):
   ----------
   document: The document being actively traversed
   original_document: The original document, kept to return in case no match for
-                      the key is found.
+    the key is found.
   
   Returns
   -------
   The document with the given key rendered.
   '''
-  to_render = get_next_key(document)
-  next_linked = traverse(next_linked(to_render)
-  cases:
-    terminal => return document.value
-    linked => render(document)
+  cases(Link) next_token:
+        | literal => return token.value
+        | hanging =>
+          # Do a horizontal search of the current file
+          if token.value is in link_map.keys:
+            return link_map[token.value]
+          else:
+            # Do a DFS, starting with full prefixing
+            dereferenced = search_for(next_token, link_map, 0, [], link_map)
+            # NOTE: HOW DO WE KNOW WHEN WE HAVE REACHED MAX DEPREFIX
+            # TODO: Fix this hacky solution
+            if dereferenced == -1:
+              return next_token
+            elif derefrences == -2:
+              return render_next_token(next_token, link_map, deprefix_count + 1)
+            else:
+              return dereferenced
+
+def search_for(token :: Token.hanging, link_map :: Map, prefixes :: List<String>,
+  deprefix_count :: Int, original_link_map :: Map):
+  '''
+  Searches for the next terminal node that matches the pattern referenced in
+  key.
+  NOTE: I do not think this handles cycles yet... That may be tricky. I believe
+  we will have to pass a path parameter AND give each node a unique identifier
+  (a hash).
+  NOTE: This is currently super inefficient (it doesn't cut out impossible branches
+  while prefixed, nor does it collect all possible answers in a single execution and
+  stop when it knows its found the best one.)
+  '''
+  cases(link_map):
+    | populated =>
+      next_link = head(link_map.values)
+      neighbor = next_link.destination
+      keys = neighbor.link_map.keys
+      # removes the most recent (rightmost) deprefix_count prefixes from prefixes
+      prefixes = remove_last_n(prefixes, deprefix_count)
+      # condense the prefix list into a single string
+      prefix = fold(prefixes, lambda x, y: x + y)
+      # add the prefix to each key
+      prefixed_keys = map(keys, lambda x: prefix + x)
+      #if we find a match
+      if token.value is in prefixed_keys:
+        return neighbor.link_map[token.value]
+      else:
+        #go to next depth and repeat
+        result = search_for(token, neighbor.link_map.destination.link_map, deprefix_count, original_link_map)
+        if result is not None:
+          return result
+        else:
+          #if we didn't find anything, search horizontally
+          search_for(token, rest(link_map), prefixes, deprefix_count, original_link_map)
+    #will this happen in the right order... No it will not, has to be called from top
+    | mt => return None #NOTE: Need some way to move knowledge about prefixing limit up the stack
+
 
 def render_terminal(terminal :: Terminal):
   assert document.is_Terminal
@@ -105,10 +204,24 @@ def render_terminal(terminal :: Terminal):
 data Document:
   '''
   Represents a Node on the Prose Object Graph
+
+  Types
+  -----
+  terminal: A node that has no outgoing connections. This node contains text,
+    and is the only node in the Prose Object Graph that has a non relational
+    value.
+
+    Subfields
+    ---------
+    value: the value of the node. Currently only a string. In the future, should
+      be a Turing Complete script.
+  
+  linked: A node that has outgoing links. Subfields:
+    value: a
   '''
   | terminal(value :: String) # We may expand this to include other things,
     # such as code
-  | linked(links :: [list_of_links], keys :: {key1 : link_in_links, ...},
+  | linked(value :: [list_of_links], link_map :: {key1 : link_in_links, ...},
       name :: string)
 
 data Link:
@@ -118,12 +231,15 @@ data Link:
   | linked(start :: Document.linked, destination :: Document.linked)
   | terminal(start :: Document.linked, destination :: Document.terminal)
 
-data Key:
+data Token:
   '''
-  A key representing the binding of a link.
+  Represents a Token (a value) on the Prose Object Graph
   '''
-  | linked(name :: String, link :: Link.linked)
-  | literal(name :: String, link :: Link.terminal)
+  # I need to consider how to implement this with extensibility to scripts in mind
+  # This needs to be able to handle code as well as text...
+  | literal(value :: Object)
+  | hanging(reference :: String, prefixes :: List)
+  | mt
 ```
 
 ### Moving Forward: a Roadmap
