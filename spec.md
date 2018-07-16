@@ -103,7 +103,10 @@ Recursion is a central concept in functional programming. Each recursive functio
 #### **Main Verbs: Function Contracts (in Statically Typed syntax)**
 
 ```python
-def render_document(document :: Document):
+#NOTE: max_depth should be calculated once at the beginning of the rendering.
+#      This isn't ideal though, as it adds an unecessary full tree search.
+
+def render_document(document :: Document, max_depth :: Int):
   '''
   Render key by key until the document is terminal, at which time we return its
   value.
@@ -124,7 +127,7 @@ def render_document(document :: Document):
       next_token = head(document.token_list)
       render_next_token(next_token, document.link_map, 0) + render_document(rest_of_document)
 
-def render_next_token(next_token :: Token, link_map :: Map, deprefix_count):
+def render_next_token(next_token :: Token, link_map :: Map, deprefix_count, max_depth :: Int):
   '''
   Render the next key in the document.
 
@@ -149,10 +152,10 @@ def render_next_token(next_token :: Token, link_map :: Map, deprefix_count):
             dereferenced = search_for(next_token, link_map, 0, [], link_map)
             # NOTE: HOW DO WE KNOW WHEN WE HAVE REACHED MAX DEPREFIX
             # TODO: Fix this hacky solution
-            if dereferenced == -1:
+            if dereferenced == None and not (deprefix_count < max_depth):
               return next_token
-            elif derefrences == -2:
-              return render_next_token(next_token, link_map, deprefix_count + 1)
+            elif dereferenced == None:
+              return render_next_token(next_token, link_map, deprefix_count + 1, max_depth)
             else:
               return dereferenced
 
@@ -166,7 +169,9 @@ def search_for(token :: Token.hanging, link_map :: Map, prefixes :: List<String>
   (a hash).
   NOTE: This is currently super inefficient (it doesn't cut out impossible branches
   while prefixed, nor does it collect all possible answers in a single execution and
-  stop when it knows its found the best one.)
+  stop when it knows its found the best one.) Both the proposed accumulating method and
+  the looping method have the same worst case performance, so I would assume that that
+  looping method is better b/c it has better average case as well.
   '''
   cases(link_map):
     | populated =>
@@ -183,15 +188,16 @@ def search_for(token :: Token.hanging, link_map :: Map, prefixes :: List<String>
       if token.value is in prefixed_keys:
         return neighbor.link_map[token.value]
       else:
-        #go to next depth and repeat
+        # go to next depth and repeat
         result = search_for(token, neighbor.link_map.destination.link_map, deprefix_count, original_link_map)
         if result is not None:
+          # we found a match in the sub_tree!
           return result
         else:
-          #if we didn't find anything, search horizontally
+          # if we didn't find anything, search horizontally
           search_for(token, rest(link_map), prefixes, deprefix_count, original_link_map)
-    #will this happen in the right order... No it will not, has to be called from top
-    | mt => return None #NOTE: Need some way to move knowledge about prefixing limit up the stack
+    | mt => return None
+      #NOTE: Need some better way to move knowledge about prefixing limit up the stack
 
 
 def render_terminal(terminal :: Terminal):
