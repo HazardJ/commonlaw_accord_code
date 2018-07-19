@@ -43,20 +43,17 @@ I am approaching the object model as if it can have cycles. Also note that the l
 -------\\---/------  
 --------d--------
 
-the keys in 'd' can have two names - those that contain prefixes from 'b', and those that contain prefixes from 'c'.
+the keys in 'd' can have two names - those that contain prefixes from 'b', and those that contain prefixes from 'c'. In this current implementation, I am ignoring this path dependence and marking a node visited irregardless of path.
 
 #### **Nouns: Data Structures**
 
 Our first implementation will operate only on the level of these entities:
 
-* A **Document**. It can be of type:
-    1. **Terminal Document**, which is a document containing only a String (or eventually Turing complete code, although I'm not sure how we'd represent this yet).
-    2. **Linked Document**, which is a document containing a list of tokens as well as a Map of {key : link, ...}. The list of links
-* A **Link**, which is a reference to another **Document**. It can be of type:
-    1. **Terminal Link**, which is a reference to a Terminal Document
-    2. **Hanging Link**, is a link to an unknown value. This is what was previously referred to as a 'key'.
-    3. **Linked Link**, which is a reference to a nother Linked Document. This should only appear in the Map.
-* A **Token**
+* A **Document**, which has only one type. It contains a value (a list of Tokens (described below))m and a link_map of type Map<String, [Token]>, or differently conceptualized, Map<String, Document([Tokens], {})>. Constructer: document(value :: [Token], link_map :: Map<String, [Token]>)
+* A **Token**, which can be of type:
+    1. **Literal**, which is a reference to an immediate value (int, string, bool, etc). Constructer: token(value :: Object)
+    2. **Hanging**, is a link to an unknown value. This is what was previously referred to as a 'variable'. Constructer: token(variable :: String)
+    3. **Linked**, which is a reference to a another Document. This should only appear in the Map. Constructer: token(reference :: String? Not sure about what a reference is)
 
 I would also like to consider the idea of a Universe, which is defined by all possible combination of prefixed to totally deprefixed (empty string) values. **Note that the algorithm as currently described performs a greedy search, choosing to inhabit the first valid Universe it encounters on each execution of render_key.** Any formal verification / queries we answer can only refer to the items within the universe (although it can refer to how the universe can behave even with arbitrary input).
 
@@ -64,7 +61,7 @@ I would also like to consider the idea of a Universe, which is defined by all po
 
 * **Render_document**
 
-  A Document is rendered by repeated dereferencing hanging tokens. Render_document is recursively called on a Linked_Document until it becomes a Terminal_Document (Base Case). Each call of render_document involves a series of calls to render_key, described below (each call at a lower level of prefixing).
+  A Document is rendered by repeated dereferencing its value (a list of tokens). Each call of render_document involves a series of calls to render_key, described below (each call at a lower level of prefixing).
 
 * **Render_key**
 
@@ -82,7 +79,7 @@ Here I will provide a spec that looks slightly more like code. Also, I am nowher
 
 For someone who is not familiar with functional programming, read the next paragraph. For those who are, feel free to skip to the next header (Data Structures). The pseudocode syntax isn't exactly Haskell, but its close enough that you should be able to make sense of it (its taken from pyret, the **functional language** taught in CS19 at Brown).
 
-A quick introduction to the syntax used below: I wrote the pseudocode in a functional manner using recursion. I assumed no mutable values (any mutation is assumed to be a function that takes in the original structure and outputs the new one). The central construct of the language is the 'cases' block (similar to guards / pattern matching in Haskell). The cases block can be seen as a special type of if statement, except it often depends solely on the structure of the data. The program matches the first 'pattern' it can find, and then executes that block.
+A quick introduction to the syntax used below: I wrote the pseudocode in a functional manner using recursion. I assumed no mutable values (any mutation is assumed to be a function that takes in the original structure and outputs the new one). The main syntax that may be confusing is the cases block (similar to guards / pattern matching in Haskell). The cases block can be seen as a special type of if statement, except it often depends solely on the structure of the data. The program matches the first 'pattern' it can find, and then executes that block.
 
 For example, imagine counting items in a list. The list can be either empty (a pattern, 'mt') or still have values (also a pattern, here referred to as cons(head, rest)). If it still has values left, return 1 + the same function called on the rest of the list. If not, then you return the current counter. In the imperative approach, the list structure does not help you solve the problem, so we must define the solution in the method, whereas in the functional approach, the solution falls nicely out of the structure of the data.
 
@@ -141,135 +138,176 @@ data Document:
   -----
   terminal: A node that has no outgoing connections. This node contains text,
     and is the only node in the Prose Object Graph that has a non relational
-    value.
+    value. Each value in link_map can be seen as its own document.
   
   linked: A node that has outgoing links. Subfields:
   '''
-  | terminal(value :: Token.literal) # We may expand this to include other things,
-  | linked(value :: [Token], token_map :: {key1 : token1, ...},
-      name :: string)
+  | linked(value :: [Token], link_map :: {key1 : [Token], ...})
 
 data Token:
   '''
-  Represents a Token (a value) on the Prose Object Graph
+  Represents a Token (a value) on the Prose Object Graph. The closest analogue
+  in the previous implementation was a variable. I expanded its definition to include
+  normal strings (it makes the recursion easier).
 
   Types
   -----
   literal: A token that has no references within it.
   
-  linked: A token that has references.
+  linked: A token that is a reference to another document.
 
   mt: A token with no value. Useful for deprefixing.
   '''
   # I need to consider how to implement this with extensibility to scripts in mind
   # This needs to be able to handle code as well as text...
+  # a literal value (int, bool, string, etc)
   | literal(value :: Object)
-  | linked(reference :: String, prefixes :: List)
+  # a reference to a document
+  | linked(reference :: String)
+  # a reference to a token somewhere else
+  | hanging(variable :: String)
+  # an empty token. Has no value
   | mt
 ```
 
 #### **Functions (with Pseudocode)**
 
 ```python
-
-def render_document(document :: Document):
+def render_document(document, prefixes):
   '''
-  Render key by key until the document is terminal, at which time we return its
-  value.
+  Render a document. Note that document.value is my version of root.map.
+  Also note that prefixes is stored in recent to least recent, meaning you need
+  to reverse when composing it into a single string.
 
   Parameters
   ----------
-  document: a Document to render
+  document: the document to render
 
   Returns
   -------
-  The string representing the fully rendered document.
-  NOTE: This can be modified to return a document with no links holding only a fully
-    rendered value.
+  The string representing the rendered document.
   '''
-  rest_of_document = Document(document.token_list, rest(document.link_map),
-    document.name)
-  next_token = head(document.token_list)
-  render_next_token(next_token, document.link_map) + render_document(rest_of_document)
-
-def render_next_token(next_token :: Token, link_map :: Map, prefixes :: List<String>):
-  '''
-  Render the next key in the document.
-
-  Parameters
-  ----------
-  document: The document being actively traversed
-  original_document: The original document, kept to return in case no match for
-    the key is found.
-  
-  Returns
-  -------
-  The document with the given key rendered.
-  '''
-  cases(Token) next_token:
-        | literal => return token.value
+  tokens = document.value
+  #dereference the next variable
+  cases(List) tokens:
+    | [] => return '' #return if tokens is an empty list. This is the base case
+    | (head, rest) =>
+      rest_of_document = document(rest, token_map, name)
+      cases(Token) head:
+        | literal =>
+          #if the token is literal, then we return its value + the rest of the rendered map
+          return head.value + render_document(rest_of_document, prefixes)
         | hanging =>
-          search_for(next_token, link_map, prefixes)
+          #add the necessary prefixes to the variable
+          head = fold(reverse(prefixes), lambda x, y: x + y) + head
+          prefixes, dereferenced, call_number, matched_document =
+            dereference_token(document, next_variable, prefixes, 0)
+          # the dereferenced variable may itself contain a reference which we must render
+          # we create a modified version where its value to render is the dereferenced value.
+          modified_document = document(dereferenced, document.link_map)
+          return render_document(modified_document, prefixes) +
+            render_document(rest_of_document, prefixes)
+        | linked =>
+          render_document(head.reference, )
 
-def search_for(token :: Token.hanging, link_map :: Map, prefixes :: List<String>,
-  visited :: List<Nodes>):
+def dereference_token(document, token, prefixes, call_number):
   '''
-  Searches for the next terminal node that matches the pattern referenced in
-  key. NOTE: This is currently super inefficient (it doesn't cut out impossible branches
-  while prefixed, nor does it collect all possible answers in a single execution and
-  stop when it knows its found the best one.) Both the proposed accumulating method and
-  the looping method have the same worst case performance, so I would assume that that
-  looping method is better b/c it has better average case as well.
+  Dereferences a token.
 
   Parameters
   ----------
-  token: The hanging token we are attempting to match to a key.
-  link_map: The map of links (both terminal and linked)
-  prefixes: holds all the prefixes collected up until this point.
-  deprefix_count: states how many of the prefixes to discard on each attempt to
-    match
-  visited: A list that stores all of the visited nodes. Note that this requires that
-    each node is unique identifiable (we can just use the uniqueness of pointer values,
-    or we can hash the link_map with the terminal_list).
-  original_link_map: Holds the original link map passed. Used for recurring.
+  document: the document we are dereferencing in
+  token: the token to be dereferenced
+  prefixes: the prefixes to be added during the dereferencing
+  call_number: the depth of the current call in the recursive call stack
 
   Returns
   -------
-  The dereferenced token (if found), or the original hanging token otherwise.
+  (prefixes, best_dereferenced_value, call_number): The prefixes that were used
+    to match, the value that was matched, and the call_number.
   '''
-  cases(link_map):
-    | populated =>
-      next_link = head(link_map.values)
-      neighbor = next_link.destination
-      # check if we've already visited this node with the same set of prefixes
-      have_seen = is_in(neighbor, visited, prefixes)
-      if have_seen:
-        return search_for(token, rest(link_map), prefixes, deprefix_count, visited)
-      else:
-        #add neighbor / prefix pair to visited
-        cons((neighbor, prefixes), visited)
-      keys = neighbor.link_map.keys
-      # PREFIXING + DEPREFIXING LOGIC
-      # removes the most recent (rightmost) deprefix_count prefixes from prefixes
-      prefixes = remove_last_n(prefixes, deprefix_count)
-      # condense the prefix list into a single string
-      prefix = fold(prefixes, lambda x, y: x + y)
-      # add the prefix to each key
-      prefixed_keys = map(keys, lambda x: prefix + x)
-      #if we find a match
-      if token.value is in prefixed_keys:
-        return neighbor.link_map[token.value]
-      else:
-        # go to next depth and repeat
-        result = search_for(token, neighbor.link_map.destination.link_map, deprefix_count, visited)
-        if result is not None:
-          # we found a match in the sub_tree!
-          return result
-        else:
-          # if we didn't find anything, search horizontally
-          return search_for(token, rest(link_map), prefixes, deprefix_count, visited)
-    | mt => return None
-      #NOTE: Need some better way to move knowledge about prefixing limit up the stack
+  # return the best matched key and the prefixes that it was matched with
+  (prefixes, best_choice) = scan_options_in_current_doc(link_map, token, prefixes)
+  if len(prefixes) == depth:
+    # if full prefixed answer no need to recur as everything in the subtree
+    # is of lower priority in the ordering
+    return (prefixes, best_choice, call_number, document)
+  else:
+    best_list = [(mt, mt, call_number)]
+    # get all keys that are a reference to another document
+    # NOTE: This does not capture references to documents that are within
+    # larger lists of token. For example, it misses key="Here is me!" + [/path/to/myself]
+    neighbors == [k for k in link_map.keys where k.is_linked]
+    # recur on each neighbor
+    for neighbor in neighbors:
+      best_list = cons(dereference_token(neighbor), best_list)
+    # fold to return the option with the best prefix length
+    return fold(best_list, comparison_function(x, y))
+
+def scan_options_in_current_doc(link_map, token, prefixes):
+  '''
+  Finds the best match in the current document. Recursively deprefixes until
+  a match is found.
+
+  Parameters
+  ----------
+  link_map: The key/value map of the current document being searched
+  token: The token to be dereferenced
+  prefixes: The prefixes up to be used while matching.
+
+  Returns
+  -------
+  (prefixes, dereferenced_value): The prefixes that were used in the matching and
+    the dereferenced value.
+  '''
+  squashed_prefixes = fold(reverse(prefixes), lambda x, y: x + y)
+  # prefixed token to match
+  token = squashed_prefixes + token
+  pref_keys = map(link_map.keys, lambda x: squashed_prefixes + x)
+  # dictionary matching prefixed key to original key
+  k_to_pk = {p_k : p for p_k, k in link_map.keys, pref_keys}
+  # we matched!
+  if token is in pref_keys:
+        key = k_to_pk[token]
+        return (prefixes, link_map[key])
+  else:
+    # there was no match
+    # recur if there are still prefixes left. Else return mt.
+    cases(List) prefixes:
+      | mt =>
+        return(mt, mt)
+      | (head, rest) =>
+        return scan_options_in_current_doc(link_map, token, rest)
+
+def comparison_function(x, y):
+  '''
+  Compares x and y. Returns longest prefix. If tiebreaker, returns the earlier match.
+  Remember that x and y are tuples (prefixes, best_choice, call_number). Also note
+  that this works even if one or both of x and y are of the form (mt, mt, call_number).
+
+  Parameters
+  ----------
+  x, y: tuples of the form (prefixes, chosen_dereference_value, call_number) to be compared.
+
+  Returns
+  -------
+  The value with higher priority (less deprefixed, or if even prefix length, earlier called)
+  '''
+  x_prefix, x_choice, x_call_number = x[0], x[1], x[2]
+  y_prefix, y_choice, y_call_number = y[0], y[1], y[2]
+  # If x is less deprefixed then y, return x
+  if len(x_prefix) > len(y_prefix):
+    return x
+  # If there is a tie on prefix length, return the earlier seen value
+  elif len(x_prefix) == len(y_prefix):
+    if x_call_number < y_call_number:
+      return x
+    else:
+      return y
+  # Else, either y's prefix is longer than x's or they are tied on prefix length
+  # but y was seen earlier
+  else:
+    return y
 ```
 
 ### Moving Forward: a Roadmap
