@@ -356,9 +356,57 @@ Firstly, we should establish a fresh repo. We can definitely add previous work (
 2. Finish the algorithm (including tests). Note that this step does not include any complex I/O like reading and writing to files - it will just be predefined structures held in memory.
 3. Provide an implementation of the algorithm. I think the filesystem based approach from the original attempt would be a good place to start.
 4. Design an interface. Write a simple front end (I'm leaning towards React), wrap the code from step 3 in a server. Test on localhost.
+    * **First milestone goal: XWiki type functionality**
+      * see demo we are trying to emulate [here](https://www.youtube.com/watch?v=4ZfsyTPYFIA&t=196s)
+      * user friendly interface
+      * edit in place and save in place to linked files
+      * Expand / collapse variables
+      * Table of contents
+      * Easy overriding
+      * Easy diff between files (esp with override)
+      * Versioning?
 5. Host the code and interface. Possibly consider containerizing it and deploying it as a service using Docker, Kubernetes, and AWS/Google Cloud/IPFS.
 6. Extend functionality to include version control. This means Git!
-7. Second round of UX - a great goal (obviously a stretch) is to emulate the experience of google docs. This means Git + concurrent editing of the same working directory!
-8. Add a Query language on top of the Prose Object Model. Just like SQL opened up a whole new universe of questions (arbitrary queries on relational data) we can open up a whole universe of questions (how does this mathematical model of the graph *behave when something happens*... what are the formally provable *bounds on the graph's behavior*). If Acme goes bankrupt, what happens to my bond holdings? If England wins the game, what happens to my account balance? Can I go bankrupt if at least 70% of my debtors pay me back? Etc. We should take inspiration from other declarative language (ie SQL). We should consider exactly what mathematical proofs we can provide about the behavior of the graph aka **formal verification** (very large stretch, would take a lot of learning). We should also consider this when implementing the algorithm. Any desire to **reason formally about the Prose Object Model** may require a **functional approach**.
-9. Add integration functionality to arbitrary ledgers. Any ledger that fulfills this API should be able to implement and interact with the Prose Object Model. Examples of ledgers: A SQL database, VISA, Ethereum, Bitcoin. NOTE: can we allow for the option of the prose object model being run in a decentralized fashion? It feels in many ways like smart contracts to me.
-10. Add specific implementations of these ledger APIs. I'm thinking we first do a SQL database implementation and an Ethereum implementation.
+7. Extend functionality to allow users to link to code that changes values in Prose Object maps
+8. Second round of UX - a great goal (obviously a stretch) is to emulate the experience of google docs. This means Git + concurrent editing of the same working directory!
+9. Add a Query language on top of the Prose Object Model. Just like SQL opened up a whole new universe of questions (arbitrary queries on relational data) we can open up a whole universe of questions (how does this mathematical model of the graph *behave when something happens*... what are the *formally provable bounds on the graph's behavior*). If Acme goes bankrupt, what happens to my bond holdings? If England wins the game, what happens to my account balance? Can I go bankrupt if at least 70% of my debtors pay me back? Etc. We should take inspiration from other declarative language (ie SQL). We should consider exactly what mathematical proofs we can provide about the behavior of the graph aka **formal verification** (very large stretch, would take a lot of learning). We should also consider this when implementing the algorithm. Any desire to **reason formally about the Prose Object Model** may require a **functional approach**.
+10. Add integration functionality to arbitrary ledgers. Any ledger that fulfills this API should be able to implement and interact with the Prose Object Model. Examples of ledgers: A SQL database, VISA, Ethereum, Bitcoin. NOTE: can we allow for the option of the prose object model being run in a decentralized fashion? It feels in many ways like smart contracts to me.
+11. Add specific implementations of these ledger APIs. I'm thinking we first do a SQL database implementation and an Ethereum implementation.
+
+### Notes from the call with James Hazard
+
+* James used the interface from video for two years
+* Semantic web and victorian literature
+* Barrier was the backend was complicated
+* How do you handle distributed data?
+* Redid a different version in couchDB (distributed database)
+* Went back to earlier version done in mediaWIKI
+* Why hasn't it been adopted?
+  * Lawyers don't think in anything other than Word
+  * Changing with the arrival of smart contracts
+  * No business model
+  * If you do this right, the lawyers mostly become unnecessary
+    * lawyers do error anticipation and error handling, this would remove this
+  * Tech guys have zero interest in law
+* **First milestone goal: XWiki type functionality (Copy pasted into roadmap)**
+  * user friendly interface
+  * edit in place and save in place to linked files
+  * Expand / collapse variables
+  * Table of contents
+  * Easy overriding
+  * Easy diff between files (esp with override)
+  * Versioning?
+
+X-Wiki version requires remembering more metadata:
+
+* Remembers not just the text and previous prefixes, but also the map you got it from
+  * Could go directly to the source. Could edit source / save to source
+  * Ricardian terminology: any smart contract is made up of parameters, code, and prose
+  * Can use code with the smart contract model
+    * don't put code directly in doc, do it by reference
+  * key technological challenge: access control to and of data
+    * ideally, data will stay close to where it was generated
+    * will use cryptography to ensure that data, when it moves, is secure and uncorrupted and that the asker is authorized
+    * pervasive computing
+    * learning on distributed data?
+  * Open source reading? What have the open source guys figured out that lawyers haven't yet? What haven't they figured out yet?
