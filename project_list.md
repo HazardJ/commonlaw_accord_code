@@ -4,7 +4,26 @@
 
 Good overview of the state of the Web3 stack [here](https://multicoin.capital/2018/07/10/the-web3-stack/). Note that the Web3 stack is not equivalent to the pillars I sketch here. For example, they don't mention identity at all. Their post (although phenomenal) is not comprehensive.
 
-* Contract Protocol
+* Iako: Perhaps think in four broad themes:
+  * Data - the records: format, storage, syncronization, access, proof - issues of distributed computing
+  * Code - the automated elements of transacting - independent of platform
+  * Prose - the human readable text, terms of use, explanation, documentation
+  * Uses - who benefits
+* "Wise Contracts" (Code + Prose)
+  * [Accord Project](http://accordproject.org/)
+  * [OpenLaw.io](http://openlaw.io)
+  * [Mattereum](https://www.mattereum.com/)
+  * [Agreements Network/](https://agreements.network/)
+* Prose - legal codification
+   * [Codification Efforts - List](https://github.com/CommonAccord/Model_Document_Projects/blob/master/List.md)
+   * [American Law Institute](http://ali.org)
+   * [European Law Institute](https://www.europeanlawinstitute.eu/)
+   * [UNIDROIT](https://www.unidroit.org/)
+* Existant, Experience, Infrastructure - Enterprise Contract Automation, Document Assembly, Legacy
+   * CLM - Stub - need list - see [IACCM-Cap Gemini Guide](https://software.iaccm.com/)
+   * Document Assembly - E.g. [Doc Assembly](https://docassemble.org/), [Contract Express](https://legal.thomsonreuters.com.au/products/contract-express/), [Hot Docs](https://www.hotdocs.com/)
+   * Analytics, NLP, AI for collections of documents (organizing the past) - [KM Standards](http://kmstandards.com/), [RAVN](https://imanage.com/product/ravn/), [LexPredict](https://www.lexpredict.com/products/software-products/)
+* Contract Protocol (Code?)
   * [OpenZeppelin](https://openzeppelin.org/)
   * [Enigma](https://enigma.co/)
   * [Codius](https://codius.org/)
